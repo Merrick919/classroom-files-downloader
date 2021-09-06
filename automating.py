@@ -14,7 +14,7 @@ import pprint
 def main():
 
     service = get_classroom_service()
-    courses = service.courses().list(pageSize=20).execute()
+    courses = service.courses().list(pageSize=2).execute()
     
     downd_files=list()
 
@@ -24,18 +24,32 @@ def main():
         course_id = course['id']
 
         if not (path.exists(course_name)):
+            # Replace invalid characters.
+            course_name = (course_name
+                .replace("\\", "-")
+                .replace("/", "-")
+                .replace(":", "-")
+                .replace("*", "-")
+                .replace("?", "-")
+                .replace("\"", "-")
+                .replace("<", "-")
+                .replace(">", "-")
+                .replace("|", "-"))
+            
             os.mkdir('./' + course_name)
-            os.mkdir('./' +course_name+ "/cours")
-            os.mkdir('./' + course_name+"/td")
+
+            # I don't know what this is for.
+            os.mkdir('./' + course_name + "/cours")
+            os.mkdir('./' + course_name + "/td")
         else:
-            print("{} Already exists ".format(course_name))
+            print("{} already exists".format(course_name))
 
         anoncs = service.courses().announcements().list(
             courseId=course_id).execute()
         work = service.courses().courseWork().list(
             courseId=course_id).execute()
 
-        downd_files = downd_files + download_annonc_files(anoncs, course_name)
+        downd_files = downd_files + download_announce_files(anoncs, course_name)
         downd_files = downd_files + download_works_files(work, course_name)
     pprint.pprint(downd_files)
 
@@ -46,9 +60,8 @@ def get_classroom_service():
         'https://www.googleapis.com/auth/classroom.announcements.readonly',
         'https://www.googleapis.com/auth/classroom.student-submissions.me.readonly'
     ]
-    """Shows basic usage of the Classroom API.
-    Prints the names of the first 10 courses the user has access to.
-    """
+    # Shows basic usage of the Classroom API.
+    # Prints the names of the first 10 courses the user has access to.
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -62,7 +75,7 @@ def get_classroom_service():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
+                'credentials-classroom.json', SCOPES)
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
         with open('token.pickle', 'wb') as token:
@@ -75,9 +88,8 @@ def get_classroom_service():
 def download_file(file_id, file_name, course_name):
 
     SCOPES = ['https://www.googleapis.com/auth/drive']
-    """Shows basic usage of the Drive v3 API.
-    Prints the names and ids of the first 10 files the user has access to.
-    """
+    # Shows basic usage of the Drive v3 API.
+    # Prints the names and ids of the first 10 files the user has access to.
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -91,7 +103,7 @@ def download_file(file_id, file_name, course_name):
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                'credential-drive.json', SCOPES)
+                'credentials-drive.json', SCOPES)
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
         with open('token.pickledrive', 'wb') as token:
@@ -107,8 +119,12 @@ def download_file(file_id, file_name, course_name):
     
 
     while done is False:
-        status, done = downloader.next_chunk()
-        print("Download %d%%." % int(status.progress() * 100))
+        try:
+            status, done = downloader.next_chunk()
+            print("Download %d%%" % int(status.progress() * 100))
+        except:
+            print("Error downloading, ignoring")
+            break
 
     fh.seek(0)
 
@@ -118,26 +134,26 @@ def download_file(file_id, file_name, course_name):
 
 
 
-def download_annonc_files(announcements, course_name):
-    annonc_list = announcements.keys()
+def download_announce_files(announcements, course_name):
+    announce_list = announcements.keys()
     downloaded = list()
-    if (len(annonc_list) != 0):
+    if (len(announce_list) != 0):
         present_files = getListOfFiles(os.path.join('./', course_name))
 
         for announcement in announcements['announcements']:
-            try:  #if this announcements contain a file then do this
+            try:  # If this announcements contain a file then do this
                 for val in announcement['materials']:
                     file_id = val['driveFile']['driveFile']['id']
                     file_name = val['driveFile']['driveFile']['title']
                     extension = (
                         os.path.splitext(file_name)
-                    )[1]  #the extension exists in second elemnts of returned tuple
+                    )[1]  # The extension exists in second elemnts of returned tuple
                     path_str = os.path.join('./', course_name, file_name)
 
                     if ((valid(extension[1:])) and (file_name not in present_files)) :
-                        print("DOWNLOADING " ,file_name)
+                        print("Downloading ", file_name)
                         download_file(file_id, file_name, course_name)
-                        downloaded.append("Annonoucemet :  "+course_name +' : ' + file_name)                        
+                        downloaded.append("Announcement: " + course_name + ': ' + file_name)                        
                     else:
                         print(file_name, "already exists")
             except KeyError as e:
@@ -151,7 +167,7 @@ def download_works_files(works, course_name):
         present_files = getListOfFiles(os.path.join('./', course_name))
 
         for work in works['courseWork']:
-            try:  #if this announcements contain a file then do this
+            try:  # If this announcements contain a file then do this
                 for val in work['materials']:
                     file_id = val['driveFile']['driveFile']['id']
                     file_name = val['driveFile']['driveFile']['title']
@@ -162,12 +178,12 @@ def download_works_files(works, course_name):
                         file_id = file_altern_link[file_altern_link.find('=')+1:]
                     extension = (
                         os.path.splitext(file_name)
-                    )[1]  #the extension exists in second elemnts of returned tuple
+                    )[1]  # The extension exists in second elemnts of returned tuple
                     path_str = os.path.join('./', course_name, file_name)
                     if ((valid(extension[1:])) and (file_name not in present_files)) :
-                        print("DOWNLOADING " ,file_name)
+                        print("Downloading ", file_name)
                         download_file(file_id, file_name, course_name)
-                        downloaded.append("Devoir :  "+course_name +' : ' + file_name)                        
+                        downloaded.append("Devoir: " + course_name + ': ' + file_name)                        
                     else:
                         print(file_name, "already exists")
             except KeyError as e:
@@ -177,14 +193,15 @@ def download_works_files(works, course_name):
 
 def valid(ch):
     return ch in [
-        'pdf', 'docx', 'pptx', 'png', 'jpg', 'html', 'css', 'js', 'java',
-        'class', 'txt', 'r', 'm', ' sql', 'doc', 'mp3', 'rar', 'zip'
+        'pdf', 'docx', 'pptx', 'png', 'jpg', 'jpeg', 'jfif', 'html', 'css', 'js', 'py', 'java',
+        'class', 'txt', 'md', 'r', 'm', 'sql', 'doc', 'mp3', 'mp4', 'rar', 'zip', 'exe',
+        'webp', 'webm', 'mov', 'ogg', 'mkv'
     ]
 
 
 def getListOfFiles(dirName):
-    # create a list of file and sub directories 
-    # names in the given directory 
+    # Create a list of file and sub directories 
+    # Names in the given directory 
     listOfFile = os.listdir(dirName)
     allFiles = list()
     # Iterate over all the entries
